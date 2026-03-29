@@ -250,8 +250,9 @@ const LedgerPage = () => {
     setClient(prev => prev ? { ...prev, notes: updatedNotes } : prev);
   };
 
-  const handleShareImage = async () => {
-    toast.info('جاري تجهيز الصورة، الرجاء الانتظار...');
+ const handleShareImage = async () => {
+    toast.info('جاري تجهيز صورة كشف الحساب...');
+    
     const loadHtml2Canvas = () => {
       return new Promise((resolve, reject) => {
         if ((window as any).html2canvas) {
@@ -268,12 +269,21 @@ const LedgerPage = () => {
 
     try {
       const html2canvasLib = await loadHtml2Canvas() as any;
+      // نحدد العنصر الذي يحتوي على البيانات (id="ledger-content-to-capture")
       const element = document.getElementById('ledger-content-to-capture'); 
-      if (!element) return;
+      if (!element) {
+        toast.error('لم يتم العثور على محتوى لالتقاطه');
+        return;
+      }
 
+      // إعدادات التقاط الصورة بدقة عالية
       const canvas = await html2canvasLib(element, { 
-        scale: 2, 
-        backgroundColor: '#ffffff' 
+        scale: 3, // دقة عالية جداً
+        useCORS: true,
+        backgroundColor: '#f9fafb', // لون خلفية التطبيق
+        logging: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
       });
       
       canvas.toBlob(async (blob: Blob | null) => {
@@ -281,21 +291,30 @@ const LedgerPage = () => {
         const fileName = `كشف_حساب_${client?.name || 'عميل'}.png`;
         const file = new File([blob], fileName, { type: 'image/png' });
         
+        // محاولة المشاركة عبر تطبيقات الهاتف (واتساب، الخ)
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: 'صورة كشف الحساب',
-            text: `تفاصيل حساب ${client?.name || 'العميل'}`
-          });
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'كشف حساب',
+              text: `كشف حساب العميل: ${client?.name}`
+            });
+          } catch (e) {
+            // إذا ألغى المستخدم المشاركة لا نفعل شيء
+          }
         } else {
+          // إذا كان المتصفح لا يدعم المشاركة، نقوم بتحميل الصورة مباشرة
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
-          a.href = url; a.download = fileName; a.click();
+          a.href = url; 
+          a.download = fileName; 
+          a.click();
+          toast.success('تم حفظ الصورة في الجهاز');
         }
-      }, 'image/png');
+      }, 'image/png', 1.0); // جودة كاملة
     } catch (error) {
       console.error('Snapshot error:', error);
-      toast.error('حدث خطأ أثناء التقاط الصورة');
+      toast.error('حدث خطأ أثناء إنشاء الصورة');
     }
     setShowShareModal(false);
   };
